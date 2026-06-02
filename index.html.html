@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICU 病情追蹤系統</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface2: #f2f0eb;
+  --border: rgba(0,0,0,0.1);
+  --border2: rgba(0,0,0,0.18);
+  --text: #1a1916;
+  --text2: #5a5855;
+  --text3: #9a9893;
+  --accent: #1a5fa8;
+  --accent-bg: #e8f0fb;
+  --accent-text: #1a5fa8;
+  --success: #2d7a4f;
+  --success-bg: #e6f4ed;
+  --warn: #8a5a00;
+  --warn-bg: #fef3dc;
+  --danger: #a02020;
+  --danger-bg: #fdeaea;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow: 0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141412;
+    --surface: #1e1d1a;
+    --surface2: #282724;
+    --border: rgba(255,255,255,0.1);
+    --border2: rgba(255,255,255,0.18);
+    --text: #f0ede8;
+    --text2: #a0a09a;
+    --text3: #666660;
+    --accent: #5b9fe0;
+    --accent-bg: #1a2d44;
+    --accent-text: #7db8f0;
+    --success: #4daa74;
+    --success-bg: #162a20;
+    --warn: #d4920a;
+    --warn-bg: #2a2000;
+    --danger: #e06060;
+    --danger-bg: #2a1010;
+    --shadow: 0 1px 4px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2);
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); color: var(--text); font-family: 'Noto Sans TC', sans-serif; font-size: 15px; line-height: 1.6; min-height: 100vh; }
+.app { max-width: 720px; margin: 0 auto; padding: 0 0 80px; }
+
+/* Header */
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 20px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; }
+.header-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-bg); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.header-title { font-size: 16px; font-weight: 600; color: var(--text); }
+.header-sub { font-size: 12px; color: var(--text3); }
+.header-sync { margin-left: auto; font-size: 12px; color: var(--success); background: var(--success-bg); padding: 4px 10px; border-radius: 99px; }
+
+/* Nav */
+.nav { display: flex; gap: 4px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.nav-btn { flex-shrink: 0; padding: 8px 14px; border: none; border-radius: var(--radius); background: transparent; cursor: pointer; font-size: 13px; font-family: 'Noto Sans TC', sans-serif; color: var(--text2); font-weight: 500; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+.nav-btn.active { background: var(--accent-bg); color: var(--accent-text); }
+.nav-btn:hover:not(.active) { background: var(--surface2); }
+
+/* Content */
+.content { padding: 20px 16px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* Section */
+.section-title { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin: 1.5rem 0 0.75rem; padding-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
+.section-title span { font-size: 14px; }
+
+/* Grid */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 12px; color: var(--text2); font-weight: 500; }
+.field .unit { font-size: 11px; color: var(--text3); font-weight: 400; margin-left: 3px; }
+input[type=number], input[type=text], input[type=date], textarea, select {
+  border: 1px solid var(--border2); border-radius: var(--radius); padding: 8px 11px;
+  font-size: 14px; font-family: 'Noto Sans TC', sans-serif; width: 100%;
+  background: var(--surface); color: var(--text); transition: border-color 0.15s;
+}
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26,95,168,0.1); }
+textarea { resize: vertical; min-height: 72px; }
+
+/* Buttons */
+.btn-save { background: var(--accent); color: #fff; border: none; padding: 13px 24px; border-radius: var(--radius); font-size: 15px; font-weight: 600; font-family: 'Noto Sans TC', sans-serif; cursor: pointer; width: 100%; margin-top: 1.5rem; transition: opacity 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn-save:hover { opacity: 0.88; }
+.btn-sm { background: transparent; color: var(--text2); border: 1px solid var(--border2); padding: 7px 13px; border-radius: var(--radius); font-size: 13px; font-family: 'Noto Sans TC', sans-serif; cursor: pointer; transition: background 0.15s; }
+.btn-sm:hover { background: var(--surface2); }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow); }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.metric { background: var(--surface2); border-radius: var(--radius); padding: 12px 14px; }
+.metric-label { font-size: 11px; color: var(--text3); font-weight: 500; margin-bottom: 4px; }
+.metric-val { font-size: 22px; font-weight: 600; color: var(--text); }
+.metric-unit { font-size: 11px; color: var(--text3); margin-left: 2px; }
+
+/* Calendar */
+.cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.cal-month { font-size: 16px; font-weight: 600; }
+.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 4px; }
+.cal-wd { font-size: 11px; color: var(--text3); padding: 4px 0; font-weight: 500; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 13px; cursor: pointer; color: var(--text2); transition: all 0.12s; border: 1.5px solid transparent; }
+.cal-cell:hover { background: var(--surface2); }
+.cal-cell.has-data { background: var(--accent-bg); color: var(--accent-text); font-weight: 600; }
+.cal-cell.today { border-color: var(--accent); }
+.cal-cell.selected { background: var(--accent); color: #fff; }
+
+/* Day detail */
+.day-detail { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-top: 14px; box-shadow: var(--shadow); }
+.detail-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.detail-row:last-child { border-bottom: none; }
+.dk { color: var(--text2); }
+.dv { font-weight: 600; color: var(--text); }
+.note-block { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text2); line-height: 1.7; }
+.note-block strong { color: var(--text); }
+
+/* Upload */
+.upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius-lg); padding: 22px; text-align: center; cursor: pointer; color: var(--text3); font-size: 13px; transition: all 0.15s; }
+.upload-zone:hover { border-color: var(--accent); color: var(--accent-text); background: var(--accent-bg); }
+.img-preview { max-width: 100%; border-radius: var(--radius); margin-top: 10px; border: 1px solid var(--border); }
+
+/* Toast */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500; opacity: 0; transition: all 0.3s; pointer-events: none; z-index: 999; white-space: nowrap; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.ok { color: var(--success); border-color: var(--success); }
+.toast.err { color: var(--danger); border-color: var(--danger); }
+
+/* Trend */
+.trend-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.trend-toolbar label { font-size: 13px; color: var(--text2); }
+select { cursor: pointer; }
+.chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow); }
+
+/* Empty */
+.empty { text-align: center; padding: 48px 0; color: var(--text3); }
+.empty-icon { font-size: 36px; margin-bottom: 10px; }
+.empty-msg { font-size: 14px; }
+
+/* Stats */
+.stats-row { font-size: 14px; color: var(--text2); line-height: 2.2; }
+.stats-row b { color: var(--text); font-weight: 600; }
+.export-btn { margin-top: 1rem; background: var(--success-bg); color: var(--success); border: 1px solid rgba(45,122,79,0.3); padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 600; font-family: 'Noto Sans TC', sans-serif; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: opacity 0.15s; }
+.export-btn:hover { opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="header-icon">🏥</div>
+    <div>
+      <div class="header-title">ICU 病情追蹤系統</div>
+      <div class="header-sub">每日醫療數據記錄</div>
+    </div>
+    <div class="header-sync" id="sync-status">✓ 本機已儲存</div>
+  </div>
+
+  <div class="nav">
+    <button class="nav-btn active" onclick="showPage('entry')">✏️ 今日記錄</button>
+    <button class="nav-btn" onclick="showPage('history')">📅 歷史查看</button>
+    <button class="nav-btn" onclick="showPage('trends')">📈 趨勢圖表</button>
+    <button class="nav-btn" onclick="showPage('summary')">📊 總覽</button>
+  </div>
+
+  <div class="content">
+
+    <!-- ===== 今日記錄 ===== -->
+    <div id="page-entry" class="page active">
+      <div class="field" style="margin-bottom:1rem;">
+        <label>記錄日期</label>
+        <input type="date" id="entry-date">
+      </div>
+
+      <div class="section-title"><span>❤️</span> 生命徵象</div>
+      <div class="grid2">
+        <div class="field"><label>血壓收縮壓 <span class="unit">mmHg</span></label><input type="number" id="bp_sys" placeholder="例：120"></div>
+        <div class="field"><label>血壓舒張壓 <span class="unit">mmHg</span></label><input type="number" id="bp_dia" placeholder="例：80"></div>
+        <div class="field"><label>心跳 <span class="unit">bpm</span></label><input type="number" id="hr" placeholder="例：75"></div>
+        <div class="field"><label>體溫 <span class="unit">°C</span></label><input type="number" step="0.1" id="temp" placeholder="例：37.2"></div>
+        <div class="field"><label>血氧 SpO2 <span class="unit">%</span></label><input type="number" id="spo2" placeholder="例：98"></div>
+        <div class="field"><label>尿量 <span class="unit">mL/24h</span></label><input type="number" id="urine" placeholder="例：1200"></div>
+      </div>
+
+      <div class="section-title"><span>🫁</span> 呼吸機數值</div>
+      <div class="grid2">
+        <div class="field"><label>FiO2 <span class="unit">%</span></label><input type="number" id="fio2" placeholder="例：60"></div>
+        <div class="field"><label>PEEP <span class="unit">cmH₂O</span></label><input type="number" id="peep" placeholder="例：8"></div>
+        <div class="field"><label>潮氣量 Vt <span class="unit">mL</span></label><input type="number" id="vt" placeholder="例：450"></div>
+        <div class="field"><label>呼吸頻率 <span class="unit">/min</span></label><input type="number" id="rr" placeholder="例：16"></div>
+        <div class="field"><label>吸氣峰壓 PIP <span class="unit">cmH₂O</span></label><input type="number" id="pip" placeholder="例：28"></div>
+        <div class="field"><label>平台壓 Pplat <span class="unit">cmH₂O</span></label><input type="number" id="pplat" placeholder="例：24"></div>
+      </div>
+
+      <div class="section-title"><span>🔴</span> 葉克膜（ECMO）</div>
+      <div class="grid2">
+        <div class="field"><label>血流量 <span class="unit">L/min</span></label><input type="number" step="0.1" id="ecmo_flow" placeholder="例：3.5"></div>
+        <div class="field"><label>轉速 <span class="unit">RPM</span></label><input type="number" id="ecmo_rpm" placeholder="例：3000"></div>
+        <div class="field"><label>掃氣流量 <span class="unit">L/min</span></label><input type="number" step="0.1" id="ecmo_sweep" placeholder="例：4.0"></div>
+        <div class="field"><label>FdO2 <span class="unit">%</span></label><input type="number" id="ecmo_fdo2" placeholder="例：100"></div>
+        <div class="field"><label>ACT 凝血時間 <span class="unit">sec</span></label><input type="number" id="ecmo_act" placeholder="例：180"></div>
+        <div class="field"><label>肝素劑量 <span class="unit">U/h</span></label><input type="number" id="heparin" placeholder="例：800"></div>
+      </div>
+
+      <div class="section-title"><span>🧪</span> 血液檢驗</div>
+      <div class="grid2">
+        <div class="field"><label>WBC <span class="unit">×10³/μL</span></label><input type="number" step="0.1" id="wbc" placeholder="例：12.5"></div>
+        <div class="field"><label>CRP <span class="unit">mg/dL</span></label><input type="number" step="0.1" id="crp" placeholder="例：8.3"></div>
+        <div class="field"><label>PCT 降鈣素原 <span class="unit">ng/mL</span></label><input type="number" step="0.01" id="pct" placeholder="例：2.1"></div>
+        <div class="field"><label>Hb 血紅素 <span class="unit">g/dL</span></label><input type="number" step="0.1" id="hb" placeholder="例：10.2"></div>
+        <div class="field"><label>PLT 血小板 <span class="unit">×10³/μL</span></label><input type="number" id="plt" placeholder="例：180"></div>
+        <div class="field"><label>Creatinine <span class="unit">mg/dL</span></label><input type="number" step="0.01" id="cr" placeholder="例：1.2"></div>
+        <div class="field"><label>BUN <span class="unit">mg/dL</span></label><input type="number" step="0.1" id="bun" placeholder="例：25"></div>
+        <div class="field"><label>ALT <span class="unit">U/L</span></label><input type="number" id="alt" placeholder="例：45"></div>
+        <div class="field"><label>AST <span class="unit">U/L</span></label><input type="number" id="ast" placeholder="例：38"></div>
+        <div class="field"><label>Albumin <span class="unit">g/dL</span></label><input type="number" step="0.1" id="alb" placeholder="例：3.2"></div>
+        <div class="field"><label>Lactate 乳酸 <span class="unit">mmol/L</span></label><input type="number" step="0.1" id="lac" placeholder="例：1.8"></div>
+        <div class="field"><label>D-dimer <span class="unit">μg/mL</span></label><input type="number" step="0.01" id="ddimer" placeholder="例：3.5"></div>
+      </div>
+
+      <div class="section-title"><span>🩻</span> X 光結果</div>
+      <div class="field" style="margin-bottom:10px;">
+        <label>X 光觀察紀錄</label>
+        <textarea id="xray_note" placeholder="例：雙側肺浸潤較昨日改善，右側少量積液仍存在..."></textarea>
+      </div>
+      <div class="upload-zone" onclick="document.getElementById('xray-upload').click()">
+        📷 點擊上傳 X 光影像（選填）
+        <input type="file" id="xray-upload" style="display:none" accept="image/*" onchange="previewImg(this,'xray-preview','xray-b64')">
+      </div>
+      <img id="xray-preview" class="img-preview" style="display:none;">
+      <input type="hidden" id="xray-b64">
+
+      <div class="section-title"><span>💊</span> 藥物與備註</div>
+      <div class="grid2">
+        <div class="field"><label>鎮定劑劑量 <span class="unit">mg/h</span></label><input type="number" step="0.1" id="sed_dose" placeholder="例：5.0"></div>
+        <div class="field"><label>肌肉鬆弛劑 <span class="unit">mg/h</span></label><input type="number" step="0.1" id="nmb_dose" placeholder="例：10"></div>
+        <div class="field"><label>升壓劑 <span class="unit">mcg/kg/min</span></label><input type="number" step="0.01" id="vaso" placeholder="例：0.05"></div>
+        <div class="field"><label>抗生素名稱</label><input type="text" id="abx" placeholder="例：Meropenem"></div>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label>今日整體觀察與備註</label>
+        <textarea id="daily_note" placeholder="今日病況整體變化、醫師說明重點、家屬觀察..."></textarea>
+      </div>
+
+      <button class="btn-save" onclick="saveEntry()">💾 儲存今日記錄</button>
+    </div>
+
+    <!-- ===== 歷史查看 ===== -->
+    <div id="page-history" class="page">
+      <div class="card">
+        <div class="cal-header">
+          <div class="cal-month" id="cal-month-label"></div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-sm" onclick="changeMonth(-1)">‹</button>
+            <button class="btn-sm" onclick="changeMonth(1)">›</button>
+          </div>
+        </div>
+        <div class="cal-weekdays">
+          <div class="cal-wd">日</div><div class="cal-wd">一</div><div class="cal-wd">二</div>
+          <div class="cal-wd">三</div><div class="cal-wd">四</div><div class="cal-wd">五</div><div class="cal-wd">六</div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+      <div id="selected-day-detail"></div>
+    </div>
+
+    <!-- ===== 趨勢圖表 ===== -->
+    <div id="page-trends" class="page">
+      <div class="trend-toolbar">
+        <label>選擇指標：</label>
+        <select id="trend-metric" onchange="renderTrend()">
+          <option value="spo2">血氧 SpO2 (%)</option>
+          <option value="hr">心跳 (bpm)</option>
+          <option value="temp">體溫 (°C)</option>
+          <option value="fio2">FiO2 (%)</option>
+          <option value="peep">PEEP (cmH₂O)</option>
+          <option value="crp">CRP (mg/dL)</option>
+          <option value="wbc">WBC (×10³/μL)</option>
+          <option value="ecmo_flow">ECMO 血流量 (L/min)</option>
+          <option value="lac">乳酸 Lactate (mmol/L)</option>
+          <option value="pct">PCT (ng/mL)</option>
+          <option value="hb">血紅素 Hb (g/dL)</option>
+          <option value="cr">Creatinine (mg/dL)</option>
+        </select>
+      </div>
+      <div class="chart-box">
+        <div style="position:relative;height:280px;">
+          <canvas id="trend-chart" role="img" aria-label="病情趨勢折線圖"></canvas>
+        </div>
+      </div>
+      <div id="trend-empty" class="empty" style="display:none;">
+        <div class="empty-icon">📈</div>
+        <div class="empty-msg">尚無足夠數據<br><span style="font-size:12px;">請先記錄至少 2 天數據</span></div>
+      </div>
+    </div>
+
+    <!-- ===== 總覽 ===== -->
+    <div id="page-summary" class="page">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">最近一筆記錄數值</div>
+      <div class="metric-grid" id="summary-cards">
+        <div class="empty"><div class="empty-icon">📋</div><div class="empty-msg">尚無記錄</div></div>
+      </div>
+      <div class="section-title" style="margin-top:1.5rem;"><span>📊</span> 統計資訊</div>
+      <div class="stats-row" id="stats-text">計算中...</div>
+      <button class="export-btn" onclick="exportJSON()">⬇️ 匯出所有資料（JSON）</button>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let records = [];
+let calYear, calMonth;
+let trendChart = null;
+let selectedDate = null;
+
+const STORAGE_KEY = 'icu_records_v2';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) records = JSON.parse(raw);
+  } catch(e) { records = []; }
+  const today = new Date();
+  calYear = today.getFullYear();
+  calMonth = today.getMonth();
+  document.getElementById('entry-date').value = toDateStr(today);
+}
+
+function toDateStr(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function saveEntry() {
+  const date = document.getElementById('entry-date').value;
+  if (!date) { showToast('請選擇日期', 'err'); return; }
+  const d = {
+    date,
+    bp_sys: numVal('bp_sys'), bp_dia: numVal('bp_dia'),
+    hr: numVal('hr'), temp: numVal('temp'), spo2: numVal('spo2'), urine: numVal('urine'),
+    fio2: numVal('fio2'), peep: numVal('peep'), vt: numVal('vt'), rr: numVal('rr'),
+    pip: numVal('pip'), pplat: numVal('pplat'),
+    ecmo_flow: numVal('ecmo_flow'), ecmo_rpm: numVal('ecmo_rpm'),
+    ecmo_sweep: numVal('ecmo_sweep'), ecmo_fdo2: numVal('ecmo_fdo2'),
+    ecmo_act: numVal('ecmo_act'), heparin: numVal('heparin'),
+    wbc: numVal('wbc'), crp: numVal('crp'), pct: numVal('pct'),
+    hb: numVal('hb'), plt: numVal('plt'), cr: numVal('cr'), bun: numVal('bun'),
+    alt: numVal('alt'), ast: numVal('ast'), alb: numVal('alb'),
+    lac: numVal('lac'), ddimer: numVal('ddimer'),
+    xray_note: document.getElementById('xray_note').value,
+    xray_img: document.getElementById('xray-b64').value,
+    sed_dose: numVal('sed_dose'), nmb_dose: numVal('nmb_dose'),
+    vaso: numVal('vaso'), abx: document.getElementById('abx').value,
+    daily_note: document.getElementById('daily_note').value
+  };
+  const idx = records.findIndex(r => r.date === date);
+  if (idx >= 0) records[idx] = d; else records.push(d);
+  records.sort((a,b) => a.date.localeCompare(b.date));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    showToast('✓ 記錄已儲存', 'ok');
+    renderCal();
+    renderSummary();
+  } catch(e) {
+    showToast('儲存失敗（可能是空間不足）', 'err');
+  }
+}
+
+function numVal(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return isNaN(v) ? null : v;
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type||'ok');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = 'toast', 2500);
+}
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  const pages = ['entry','history','trends','summary'];
+  document.querySelectorAll('.nav-btn')[pages.indexOf(name)].classList.add('active');
+  if (name === 'trends') setTimeout(renderTrend, 60);
+  if (name === 'summary') renderSummary();
+  if (name === 'history') renderCal();
+}
+
+// ===== 日曆 =====
+function renderCal() {
+  const grid = document.getElementById('cal-grid');
+  const label = document.getElementById('cal-month-label');
+  if (!grid) return;
+  const mn = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  label.textContent = calYear + ' 年 ' + mn[calMonth];
+  const first = new Date(calYear, calMonth, 1).getDay();
+  const days = new Date(calYear, calMonth+1, 0).getDate();
+  const today = toDateStr(new Date());
+  let html = '';
+  for (let i=0;i<first;i++) html += '<div></div>';
+  for (let d=1;d<=days;d++) {
+    const ds = calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const has = records.some(r => r.date === ds);
+    const isTod = ds === today;
+    const isSel = ds === selectedDate;
+    let cls = 'cal-cell';
+    if (isSel) cls += ' selected';
+    else if (has) cls += ' has-data';
+    if (isTod) cls += ' today';
+    html += `<div class="${cls}" onclick="showDayDetail('${ds}')">${d}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function changeMonth(dir) {
+  calMonth += dir;
+  if (calMonth < 0) { calMonth=11; calYear--; }
+  if (calMonth > 11) { calMonth=0; calYear++; }
+  renderCal();
+}
+
+function showDayDetail(ds) {
+  selectedDate = ds;
+  renderCal();
+  const rec = records.find(r => r.date === ds);
+  const el = document.getElementById('selected-day-detail');
+  if (!rec) {
+    el.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:13px;padding:16px;">此日無記錄</div>`;
+    return;
+  }
+  const rows = [
+    ['血壓', rec.bp_sys&&rec.bp_dia ? `${rec.bp_sys}/${rec.bp_dia} mmHg` : null],
+    ['心跳', rec.hr ? rec.hr+' bpm' : null],
+    ['體溫', rec.temp ? rec.temp+' °C' : null],
+    ['SpO2', rec.spo2 ? rec.spo2+' %' : null],
+    ['尿量', rec.urine ? rec.urine+' mL' : null],
+    ['FiO2', rec.fio2 ? rec.fio2+' %' : null],
+    ['PEEP', rec.peep ? rec.peep+' cmH₂O' : null],
+    ['潮氣量', rec.vt ? rec.vt+' mL' : null],
+    ['ECMO 血流量', rec.ecmo_flow ? rec.ecmo_flow+' L/min' : null],
+    ['ECMO 轉速', rec.ecmo_rpm ? rec.ecmo_rpm+' RPM' : null],
+    ['ACT', rec.ecmo_act ? rec.ecmo_act+' sec' : null],
+    ['WBC', rec.wbc ? rec.wbc+' ×10³/μL' : null],
+    ['CRP', rec.crp ? rec.crp+' mg/dL' : null],
+    ['PCT', rec.pct ? rec.pct+' ng/mL' : null],
+    ['血紅素', rec.hb ? rec.hb+' g/dL' : null],
+    ['血小板', rec.plt ? rec.plt+' ×10³/μL' : null],
+    ['Creatinine', rec.cr ? rec.cr+' mg/dL' : null],
+    ['乳酸', rec.lac ? rec.lac+' mmol/L' : null],
+    ['抗生素', rec.abx||null],
+  ].filter(r => r[1]);
+
+  el.innerHTML = `
+    <div class="day-detail">
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px;">📋 ${ds} 記錄</div>
+      ${rows.map(([k,v])=>`<div class="detail-row"><span class="dk">${k}</span><span class="dv">${v}</span></div>`).join('')}
+      ${rec.xray_note ? `<div class="note-block"><strong>🩻 X光：</strong>${rec.xray_note}</div>` : ''}
+      ${rec.xray_img ? `<img src="${rec.xray_img}" class="img-preview">` : ''}
+      ${rec.daily_note ? `<div class="note-block"><strong>📝 備註：</strong>${rec.daily_note}</div>` : ''}
+    </div>`;
+}
+
+// ===== 趨勢圖 =====
+const metricMeta = {
+  spo2: { label:'SpO2', unit:'%', color:'#1D9E75' },
+  hr:   { label:'心跳', unit:'bpm', color:'#E24B4A' },
+  temp: { label:'體溫', unit:'°C', color:'#EF9F27' },
+  fio2: { label:'FiO2', unit:'%', color:'#378ADD' },
+  peep: { label:'PEEP', unit:'cmH₂O', color:'#7F77DD' },
+  crp:  { label:'CRP', unit:'mg/dL', color:'#D85A30' },
+  wbc:  { label:'WBC', unit:'×10³/μL', color:'#BA7517' },
+  ecmo_flow: { label:'ECMO 流量', unit:'L/min', color:'#5DCAA5' },
+  lac:  { label:'乳酸', unit:'mmol/L', color:'#D4537E' },
+  pct:  { label:'PCT', unit:'ng/mL', color:'#B06000' },
+  hb:   { label:'血紅素', unit:'g/dL', color:'#8855AA' },
+  cr:   { label:'Creatinine', unit:'mg/dL', color:'#666688' }
+};
+
+function renderTrend() {
+  const metric = document.getElementById('trend-metric').value;
+  const meta = metricMeta[metric];
+  const pts = records.filter(r=>r[metric]!=null).map(r=>({x:r.date.slice(5), y:r[metric]}));
+  const empty = document.getElementById('trend-empty');
+  const canvas = document.getElementById('trend-chart');
+  if (pts.length < 2) {
+    canvas.style.display='none'; empty.style.display='block'; return;
+  }
+  canvas.style.display='block'; empty.style.display='none';
+  if (trendChart) { trendChart.destroy(); trendChart=null; }
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const textColor = isDark ? '#a0a09a' : '#5a5855';
+  trendChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: pts.map(p=>p.x),
+      datasets: [{
+        label: meta.label+' ('+meta.unit+')',
+        data: pts.map(p=>p.y),
+        borderColor: meta.color,
+        backgroundColor: meta.color+'20',
+        fill: true, tension: 0.35,
+        pointRadius: 5, pointBackgroundColor: meta.color,
+        pointBorderColor: '#fff', pointBorderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{ display:false } },
+      scales: {
+        x: { grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:12}, maxRotation:45 } },
+        y: { grid:{ color:gridColor }, ticks:{ color:textColor, font:{size:12} } }
+      }
+    }
+  });
+  canvas.setAttribute('aria-label', `${meta.label}趨勢圖，共${pts.length}筆數據`);
+}
+
+// ===== 總覽 =====
+function renderSummary() {
+  const cards = document.getElementById('summary-cards');
+  const stats = document.getElementById('stats-text');
+  if (!records.length) {
+    cards.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div class="empty-icon">📋</div><div class="empty-msg">尚無記錄，請先填寫今日數據</div></div>';
+    stats.textContent = '尚無數據';
+    return;
+  }
+  const last = records[records.length-1];
+  const items = [
+    ['心跳', last.hr, 'bpm'],
+    ['SpO2', last.spo2, '%'],
+    ['體溫', last.temp, '°C'],
+    ['FiO2', last.fio2, '%'],
+    ['PEEP', last.peep, 'cmH₂O'],
+    ['CRP', last.crp, 'mg/dL'],
+    ['WBC', last.wbc, '×10³/μL'],
+    ['ECMO流量', last.ecmo_flow, 'L/min'],
+    ['乳酸', last.lac, 'mmol/L'],
+    ['Creatinine', last.cr, 'mg/dL'],
+    ['血紅素', last.hb, 'g/dL'],
+    ['血壓', last.bp_sys&&last.bp_dia?`${last.bp_sys}/${last.bp_dia}`:null, 'mmHg']
+  ].filter(i => i[1] != null);
+  cards.innerHTML = items.length
+    ? items.map(([l,v,u])=>`<div class="metric"><div class="metric-label">${l}</div><div><span class="metric-val">${v}</span><span class="metric-unit">${u}</span></div></div>`).join('')
+    : '<div class="empty" style="grid-column:1/-1;"><div class="empty-msg">最新記錄無數值</div></div>';
+  const first = records[0].date;
+  const latest = records[records.length-1].date;
+  const diff = Math.round((new Date(latest)-new Date(first))/(86400000))+1;
+  stats.innerHTML = `共記錄 <b>${records.length}</b> 天 &nbsp;·&nbsp; 首筆 <b>${first}</b> &nbsp;·&nbsp; 最近 <b>${latest}</b> &nbsp;·&nbsp; 追蹤天數 <b>${diff}</b> 天`;
+}
+
+// ===== 匯出 =====
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(records, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'icu_records_'+toDateStr(new Date())+'.json';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('✓ 資料已匯出', 'ok');
+}
+
+// ===== 圖片預覽 =====
+function previewImg(input, previewId, b64Id) {
+  const f = input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    document.getElementById(previewId).src = e.target.result;
+    document.getElementById(previewId).style.display = 'block';
+    document.getElementById(b64Id).value = e.target.result;
+  };
+  r.readAsDataURL(f);
+}
+
+// ===== 初始化 =====
+loadData();
+</script>
+</body>
+</html>
