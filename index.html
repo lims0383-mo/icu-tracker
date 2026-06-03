@@ -179,9 +179,20 @@ select { cursor: pointer; }
 
     <!-- ===== 今日記錄 ===== -->
     <div id="page-entry" class="page active">
-      <div class="field" style="margin-bottom:1rem;">
-        <label>記錄日期</label>
-        <input type="date" id="entry-date">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem;">
+        <div class="field">
+          <label>記錄日期</label>
+          <input type="date" id="entry-date">
+        </div>
+        <div class="field">
+          <label>時段</label>
+          <select id="entry-period">
+            <option value="morning">🌅 早上（06:00-12:00）</option>
+            <option value="afternoon">☀️ 下午（12:00-18:00）</option>
+            <option value="evening">🌙 晚上（18:00-24:00）</option>
+            <option value="night">🌃 深夜（00:00-06:00）</option>
+          </select>
+        </div>
       </div>
 
       <div class="section-title"><span>❤️</span> 生命徵象</div>
@@ -360,11 +371,16 @@ function loadData() {
   });
 }
 
+const periodLabel = { morning:'早上', afternoon:'下午', evening:'晚上', night:'深夜' };
+
 function saveEntry() {
   const date = document.getElementById('entry-date').value;
+  const period = document.getElementById('entry-period').value;
   if (!date) { showToast('請選擇日期', 'err'); return; }
   const d = {
     date,
+    period,
+    periodLabel: periodLabel[period],
     bp_sys: numVal('bp_sys'), bp_dia: numVal('bp_dia'),
     hr: numVal('hr'), temp: numVal('temp'), spo2: numVal('spo2'), urine: numVal('urine'),
     fio2: numVal('fio2'), peep: numVal('peep'), vt: numVal('vt'), rr: numVal('rr'),
@@ -382,8 +398,8 @@ function saveEntry() {
     vaso: numVal('vaso'), abx: document.getElementById('abx').value,
     daily_note: document.getElementById('daily_note').value
   };
-  // 用日期當key，同一天覆蓋
-  const key = date.replace(/-/g, '');
+  // 用日期+時段當key，同日同時段才覆蓋
+  const key = date.replace(/-/g, '') + '_' + period;
   dbRef.child(key).set(d)
     .then(() => {
       showToast('✓ 已同步到雲端', 'ok');
@@ -453,42 +469,48 @@ function changeMonth(dir) {
 function showDayDetail(ds) {
   selectedDate = ds;
   renderCal();
-  const rec = records.find(r => r.date === ds);
+  const dayRecs = records.filter(r => r.date === ds)
+    .sort((a,b) => {
+      const order = {morning:0, afternoon:1, evening:2, night:3};
+      return (order[a.period]||0) - (order[b.period]||0);
+    });
   const el = document.getElementById('selected-day-detail');
-  if (!rec) {
+  if (!dayRecs.length) {
     el.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:13px;padding:16px;">此日無記錄</div>`;
     return;
   }
-  const rows = [
-    ['血壓', rec.bp_sys&&rec.bp_dia ? `${rec.bp_sys}/${rec.bp_dia} mmHg` : null],
-    ['心跳', rec.hr ? rec.hr+' bpm' : null],
-    ['體溫', rec.temp ? rec.temp+' °C' : null],
-    ['SpO2', rec.spo2 ? rec.spo2+' %' : null],
-    ['尿量', rec.urine ? rec.urine+' mL' : null],
-    ['FiO2', rec.fio2 ? rec.fio2+' %' : null],
-    ['PEEP', rec.peep ? rec.peep+' cmH₂O' : null],
-    ['潮氣量', rec.vt ? rec.vt+' mL' : null],
-    ['ECMO 血流量', rec.ecmo_flow ? rec.ecmo_flow+' L/min' : null],
-    ['ECMO 轉速', rec.ecmo_rpm ? rec.ecmo_rpm+' RPM' : null],
-    ['ACT', rec.ecmo_act ? rec.ecmo_act+' sec' : null],
-    ['WBC', rec.wbc ? rec.wbc+' ×10³/μL' : null],
-    ['CRP', rec.crp ? rec.crp+' mg/dL' : null],
-    ['PCT', rec.pct ? rec.pct+' ng/mL' : null],
-    ['血紅素', rec.hb ? rec.hb+' g/dL' : null],
-    ['血小板', rec.plt ? rec.plt+' ×10³/μL' : null],
-    ['Creatinine', rec.cr ? rec.cr+' mg/dL' : null],
-    ['乳酸', rec.lac ? rec.lac+' mmol/L' : null],
-    ['抗生素', rec.abx||null],
-  ].filter(r => r[1]);
-
-  el.innerHTML = `
-    <div class="day-detail">
-      <div style="font-size:15px;font-weight:600;margin-bottom:12px;">📋 ${ds} 記錄</div>
+  el.innerHTML = dayRecs.map(rec => {
+    const rows = [
+      ['血壓', rec.bp_sys&&rec.bp_dia ? `${rec.bp_sys}/${rec.bp_dia} mmHg` : null],
+      ['心跳', rec.hr ? rec.hr+' bpm' : null],
+      ['體溫', rec.temp ? rec.temp+' °C' : null],
+      ['SpO2', rec.spo2 ? rec.spo2+' %' : null],
+      ['尿量', rec.urine ? rec.urine+' mL' : null],
+      ['FiO2', rec.fio2 ? rec.fio2+' %' : null],
+      ['PEEP', rec.peep ? rec.peep+' cmH₂O' : null],
+      ['潮氣量', rec.vt ? rec.vt+' mL' : null],
+      ['ECMO 血流量', rec.ecmo_flow ? rec.ecmo_flow+' L/min' : null],
+      ['ECMO 轉速', rec.ecmo_rpm ? rec.ecmo_rpm+' RPM' : null],
+      ['ACT', rec.ecmo_act ? rec.ecmo_act+' sec' : null],
+      ['WBC', rec.wbc ? rec.wbc+' ×10³/μL' : null],
+      ['CRP', rec.crp ? rec.crp+' mg/dL' : null],
+      ['PCT', rec.pct ? rec.pct+' ng/mL' : null],
+      ['血紅素', rec.hb ? rec.hb+' g/dL' : null],
+      ['血小板', rec.plt ? rec.plt+' ×10³/μL' : null],
+      ['Creatinine', rec.cr ? rec.cr+' mg/dL' : null],
+      ['乳酸', rec.lac ? rec.lac+' mmol/L' : null],
+      ['抗生素', rec.abx||null],
+    ].filter(r => r[1]);
+    const icons = {morning:'🌅', afternoon:'☀️', evening:'🌙', night:'🌃'};
+    return `
+    <div class="day-detail" style="margin-bottom:10px;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px;">${icons[rec.period]||'📋'} ${ds} ${rec.periodLabel||''}</div>
       ${rows.map(([k,v])=>`<div class="detail-row"><span class="dk">${k}</span><span class="dv">${v}</span></div>`).join('')}
       ${rec.xray_note ? `<div class="note-block"><strong>🩻 X光：</strong>${rec.xray_note}</div>` : ''}
       ${rec.xray_img ? `<img src="${rec.xray_img}" class="img-preview">` : ''}
       ${rec.daily_note ? `<div class="note-block"><strong>📝 備註：</strong>${rec.daily_note}</div>` : ''}
     </div>`;
+  }).join('');
 }
 
 // ===== 趨勢圖 =====
