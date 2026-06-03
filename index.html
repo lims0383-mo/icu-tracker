@@ -6,6 +6,8 @@
 <title>ICU 病情追蹤系統</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 :root {
   --bg: #f7f6f2;
@@ -321,26 +323,41 @@ select { cursor: pointer; }
 <div class="toast" id="toast"></div>
 
 <script>
+// ===== Firebase 設定 =====
+const firebaseConfig = {
+  databaseURL: "https://icu-tracker-77c92-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const dbRef = db.ref('records');
+
 let records = [];
 let calYear, calMonth;
 let trendChart = null;
 let selectedDate = null;
 
-const STORAGE_KEY = 'icu_records_v2';
+function toDateStr(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 
 function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) records = JSON.parse(raw);
-  } catch(e) { records = []; }
   const today = new Date();
   calYear = today.getFullYear();
   calMonth = today.getMonth();
   document.getElementById('entry-date').value = toDateStr(today);
-}
+  document.getElementById('sync-status').textContent = '⏳ 連線中...';
 
-function toDateStr(d) {
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  dbRef.on('value', snapshot => {
+    const data = snapshot.val();
+    records = data ? Object.values(data) : [];
+    records.sort((a,b) => a.date.localeCompare(b.date));
+    document.getElementById('sync-status').textContent = '☁️ 雲端同步';
+    renderCal();
+    renderSummary();
+  }, err => {
+    document.getElementById('sync-status').textContent = '❌ 連線失敗';
+    showToast('雲端連線失敗，請檢查網路', 'err');
+  });
 }
 
 function saveEntry() {
@@ -365,17 +382,15 @@ function saveEntry() {
     vaso: numVal('vaso'), abx: document.getElementById('abx').value,
     daily_note: document.getElementById('daily_note').value
   };
-  const idx = records.findIndex(r => r.date === date);
-  if (idx >= 0) records[idx] = d; else records.push(d);
-  records.sort((a,b) => a.date.localeCompare(b.date));
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    showToast('✓ 記錄已儲存', 'ok');
-    renderCal();
-    renderSummary();
-  } catch(e) {
-    showToast('儲存失敗（可能是空間不足）', 'err');
-  }
+  // 用日期當key，同一天覆蓋
+  const key = date.replace(/-/g, '');
+  dbRef.child(key).set(d)
+    .then(() => {
+      showToast('✓ 已同步到雲端', 'ok');
+    })
+    .catch(() => {
+      showToast('儲存失敗，請檢查網路', 'err');
+    });
 }
 
 function numVal(id) {
